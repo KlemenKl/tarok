@@ -1,15 +1,15 @@
 import 'dart:collection';
-import 'dart:ffi';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'model.dart';
 
-void main() {
+void main() async {
+  Model config = Model();
+  await config.instantiateHive();
+
   runApp(const MyApp());
 }
 
@@ -66,12 +66,16 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
+  Model config = Model();
+
   @override
   Widget build(BuildContext context) {
+    List<dynamic> data = config.retrievePlayNames();
+
     return Scaffold(
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(50.0),
+          padding: const EdgeInsets.all(10.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.start,
             children: <Widget>[
@@ -81,7 +85,7 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
               Text('Tarok', style: Theme.of(context).textTheme.displayLarge),
               const SizedBox(
-                height: 200,
+                height: 100,
                 width: 100,
               ),
               ElevatedButton(
@@ -92,13 +96,45 @@ class _MyHomePageState extends State<MyHomePage> {
                             builder: (context) => const GameStart()));
                   },
                   child: const Text('Nova igra')),
-              ElevatedButton(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text("Not implemeted yet!!!"),
-                    ));
-                  },
-                  child: const Text('Naloži igro')),
+              SizedBox(
+                height: 100,
+                width: 10,
+              ),
+              Text("Shranjene igre:"),
+              Expanded(
+                child: ListView(
+                  children: [
+                    for (var name in data)
+                      Card(
+                        elevation: 5,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15),
+                            side: BorderSide(
+                                width: 5, color: Colors.purple.shade200)),
+                        child: ListTile(
+                            leading: Icon(Icons.games),
+                            title: Text(name,
+                                style: Theme.of(context).textTheme.bodyMedium),
+                            trailing:
+                                Row(mainAxisSize: MainAxisSize.min, children: [
+                              IconButton(
+                                onPressed: () {
+                                  print("PLAY!!!!!!!!!!");
+                                },
+                                icon: Icon(Icons.play_arrow),
+                                color: Colors.green,
+                              ),
+                              IconButton(
+                                  onPressed: () {
+                                    print("EREASE!!!!!!!!!!");
+                                  },
+                                  icon: Icon(Icons.delete),
+                                  color: Colors.red),
+                            ])),
+                      )
+                  ],
+                ),
+              ),
               const Spacer(),
             ],
           ),
@@ -209,6 +245,7 @@ class _GameStartState extends State<GameStart> {
                         if (gameNameInputController.text.isNotEmpty &&
                             config.getPlayerData.isNotEmpty) {
                           config.gameName = gameNameInputController.text;
+                          config.saveData();
                           Navigator.pushReplacement(
                               context,
                               MaterialPageRoute(
@@ -250,21 +287,29 @@ class MainGameScreen extends StatefulWidget {
 class _MainGameScreenState extends State<MainGameScreen> {
   Model config = Model();
 
-  void transformData() {
-    List<List<int>> rowsFirst = [];
+  List<List<int?>> transformData() {
+    List<List<int?>> rowsFirst = [];
     bool stillFull = true;
-    int i = 0;
+    int i = 1;
     while (stillFull) {
       stillFull = false;
       rowsFirst.add([]);
-      for (var player in config.getPlayerData) {
-        if (i < player.points.length - 1) {
-          rowsFirst.lastOrNull!.add(player.points[i]);
+      for (var player in config.getPlayerData.values) {
+        print("Player: " +
+            player.name +
+            "     |||    Player Data values " +
+            player.points.toString());
+        if (i < player.points.length) {
+          rowsFirst.lastOrNull!.add(player.points[i - 1] + player.points[i]);
           stillFull = true;
+        } else {
+          rowsFirst.lastOrNull!.add(null);
         }
       }
       i++;
     }
+    print("ROWS FIRST>>>>" + rowsFirst.toString());
+    return rowsFirst;
   }
 
   @override
@@ -283,7 +328,8 @@ class _MainGameScreenState extends State<MainGameScreen> {
                 color: Colors.white,
                 padding: EdgeInsets.all(20.0),
                 child: Table(
-                  border: TableBorder.all(color: Colors.black),
+                  border: TableBorder.all(color: Colors.white),
+                  defaultVerticalAlignment: TableCellVerticalAlignment.middle,
                   children: [
                     TableRow(children: [
                       for (String name in config.getPlayerNames)
@@ -295,6 +341,16 @@ class _MainGameScreenState extends State<MainGameScreen> {
                           ),
                         ),
                     ]),
+                    for (List<int?> point in transformData())
+                      TableRow(children: [
+                        for (int? p in point)
+                          if (p == null) Container() else Text(p.toString()),
+                        //Padding(
+                        //padding: const EdgeInsets.all(8.0),
+                        //child: Text(name,
+                        //style: Theme.of(context).textTheme.labelLarge),
+                        //),
+                      ]),
                   ],
                 ),
               ),
@@ -310,10 +366,14 @@ class _MainGameScreenState extends State<MainGameScreen> {
                         child: Icon(Icons.home)),
                     ElevatedButton(
                         onPressed: () {
-                          Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (context) => NewPlay()));
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => NewPlay()),
+                          ).then((result) {
+                            setState(() {
+                              print("UPDATING STATE");
+                            });
+                          });
                         },
                         child: Icon(Icons.add)),
                   ])
@@ -334,6 +394,7 @@ class _NewPlayState extends State<NewPlay> {
   Model config = Model();
   List<int> results = List.filled(9, 0);
   String partner = '';
+  String igralec = '';
   /*
   0 - razlika
   1 - igra
@@ -347,9 +408,15 @@ class _NewPlayState extends State<NewPlay> {
   9 - napovedani pagat ultimo
   */
 
+  int calculateResults() {
+    return results.reduce((value, element) => value + element);
+  }
+
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
+    partner = 'Solo';
+    igralec = config.getPlayerNames.first;
     return Scaffold(
         appBar: AppBar(
           title: Text("Vpiši igro"),
@@ -358,111 +425,131 @@ class _NewPlayState extends State<NewPlay> {
             padding: const EdgeInsets.all(10.0),
             child: SingleChildScrollView(
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.start,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Row(
-                    children: [
-                      SizedBox(
-                        width: 100,
-                        child: TextField(
-                          decoration: new InputDecoration(labelText: "Razlika"),
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly
-                          ],
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: <Widget>[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 100,
+                          child: TextField(
+                            decoration: new InputDecoration(labelText: "Točke"),
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly
+                            ],
+                            onChanged: (value) {
+                              setState(() {
+                                if (value != '') {
+                                  results[0] = int.parse(value);
+                                } else {
+                                  results[0] = 0;
+                                }
+                              });
+                            }, // Only numbers can be entered
+                          ),
+                        ),
+                        SwitchSign(
                           onChanged: (value) {
                             setState(() {
-                              if (value != '') {
-                                results[0] = int.parse(value);
-                              } else {
-                                results[0] = 0;
-                              }
+                              results[0] *= -1;
                             });
-                          }, // Only numbers can be entered
+                          },
                         ),
-                      ),
-                      SwitchSign(
-                        onChanged: (value) {
+                      ],
+                    ),
+                    SizedBox(
+                      width: 10,
+                      height: 50,
+                    ),
+                    Row(
+                      children: [
+                        Text("Igra:"),
+                        SizedBox(
+                          width: 10,
+                          height: 10,
+                        ),
+                        DropdownButtonExample(
+                          dropdownMenu: config.getNameOfPlays.toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              results[1] = config.getValueOfPlays[value]!;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        Text("Igralec:"),
+                        SizedBox(
+                          width: 10,
+                          height: 10,
+                        ),
+                        DropdownButtonExample(
+                          dropdownMenu: config.getPlayerNames,
+                          onChanged: (value) {
+                            igralec = value;
+                          },
+                        ),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        Text("Partner:"),
+                        SizedBox(
+                          width: 10,
+                          height: 10,
+                        ),
+                        DropdownButtonExample(
+                          dropdownMenu: config.getPlayerNames,
+                          onChanged: (value) {
+                            partner = value;
+                          },
+                        ),
+                      ],
+                    ),
+                    SizedBox(
+                      width: 10,
+                      height: 50,
+                    ),
+
+                    /*
+                  CheckboxCluster(onChanged: (addings, switchSigns) {
+                    print(addings);
+                    print(switchSigns);
+                    setState(() {
+                      //CALCULATE!!!
+                      //    print(value);
+                      //for (int i = 2; i < results.length; i++) {
+                      //  results[i] = value[i - 2] * 10;
+                    });
+                  }),*/
+                    //Spacer(),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Spacer(),
+                        Text('Skupna vsota:   ',
+                            style: Theme.of(context).textTheme.labelLarge),
+                        Text(calculateResults().toString(),
+                            style: Theme.of(context).textTheme.labelLarge),
+                        Spacer(),
+                      ],
+                    ),
+                    //Spacer(),
+                    ElevatedButton(
+                        onPressed: () {
                           setState(() {
-                            results[0] *= (value ? 1 : -1);
+                            config.addPlayerPoints(igralec, calculateResults());
+                            config.addPlayerPoints(partner, calculateResults());
+                            config.saveData();
+                            Navigator.pop(context);
                           });
                         },
-                      ),
-                    ],
-                  ),
-                  SizedBox(
-                    width: 10,
-                    height: 50,
-                  ),
-                  Row(
-                    children: [
-                      Text("Igra:"),
-                      SizedBox(
-                        width: 10,
-                        height: 10,
-                      ),
-                      DropdownButtonExample(
-                        dropdownMenu: config.getNameOfPlays.toList(),
-                        onChanged: (value) {
-                          setState(() {
-                            results[1] = config.getValueOfPlays[value]!;
-                          });
-                        },
-                      ),
-                      SizedBox(
-                        width: 50,
-                        height: 10,
-                      ),
-                      Text("Partner:"),
-                      SizedBox(
-                        width: 10,
-                        height: 10,
-                      ),
-                      DropdownButtonExample(
-                        dropdownMenu: config.getPlayerNames,
-                        onChanged: (value) {
-                          partner = value;
-                        },
-                      ),
-                    ],
-                  ),
-                  SizedBox(
-                    width: 10,
-                    height: 50,
-                  ),
-                  CheckboxCluster(
-                    onChanged: (value) {
-                      setState(() {
-                        for (int i = 2; i < results.length; i++) {
-                          results[i] = value[i - 2] * 10;
-                        }
-                      });
-                    },
-                  ),
-                  //Spacer(),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Spacer(),
-                      Text('Skupna vsota:   ',
-                          style: Theme.of(context).textTheme.labelLarge),
-                      Text(
-                          results
-                              .reduce((value, element) => value + element)
-                              .toString(),
-                          style: Theme.of(context).textTheme.labelLarge),
-                      Spacer(),
-                    ],
-                  ),
-                  //Spacer(),
-                  ElevatedButton(
-                      onPressed: () {
-                        print('Here');
-                      },
-                      child: Text('Dodaj')),
-                ],
-              ),
+                        child: Text('Dodaj')),
+                  ]),
             )));
   }
 }
@@ -527,18 +614,25 @@ class SwitchSign extends StatefulWidget {
 }
 
 class _SwitchSignState extends State<SwitchSign> {
+  bool stat = true;
   @override
   Widget build(BuildContext context) {
     return Switch(
       // This bool value toggles the switch.
-      value: true,
+      value: stat,
       activeColor: Colors.green,
       inactiveTrackColor: Colors.red,
       onChanged: (bool value) {
-        // This is called when the user toggles the switch.
         setState(() {
+          stat = value;
           widget.onChanged(value);
         });
+        // This is called when the user toggles the switch.
+//        setState(() {
+//          print(
+//              "#############################################################");
+        //
+//        });
       },
     );
   }
@@ -546,15 +640,16 @@ class _SwitchSignState extends State<SwitchSign> {
 
 class CheckboxCluster extends StatefulWidget {
   const CheckboxCluster({Key? key, required this.onChanged}) : super(key: key);
-  final Function(List<int>) onChanged;
+  final Function(List<bool>, List<bool>) onChanged;
 
   @override
   State<CheckboxCluster> createState() => _CheckboxClusterState();
 }
 
 class _CheckboxClusterState extends State<CheckboxCluster> {
-  bool isChecked = false;
-  List<int> addings = List.filled(8, 0);
+  //bool? isChecked = false;
+  List<bool> addings = List.filled(8, false);
+  List<bool> switchSign = List.filled(4, true);
   /*
   bool kralji = false;
   bool napovedani_kralji = false;
@@ -570,12 +665,13 @@ class _CheckboxClusterState extends State<CheckboxCluster> {
     return Checkbox(
         checkColor: Colors.white,
         activeColor: Colors.purple.shade400,
-        value: false,
+        value: addings[adding_index],
         onChanged: (bool? value) {
           setState(() {
-            addings[adding_index] = (value! ? 1 : 0);
-            print('Addings are:' + addings.toString());
-            widget.onChanged(addings);
+            if (value != null) {
+              addings[adding_index] = value;
+              widget.onChanged(addings, switchSign);
+            }
           });
         });
   }
@@ -594,12 +690,13 @@ class _CheckboxClusterState extends State<CheckboxCluster> {
         Text('Kralji:'),
         SwitchSign(
           onChanged: (value) {
-            //print("Value is:" + value.toString());
-            //print("Addings is:" + addings.toString());
-            //addings[0] = addings[0] * (value ? 1 : -1);
-            //addings[1] = addings[1] * (value ? 1 : -1);
-            //print("Value is:" + value.toString());
-            //print("Addings is:" + addings.toString());
+            switchSign[0] = value;
+            // print("Value is:" + value.toString());
+            // print("Addings is:" + addings.toString());
+            // addings[0] = addings[0] * (value ? 1 : -1);
+            // addings[1] = addings[1] * (value ? 1 : -1);
+            // print("Value is:" + value.toString());
+            // print("Addings is:" + addings.toString());
           },
         ),
         checkboxParams(0),
@@ -609,6 +706,7 @@ class _CheckboxClusterState extends State<CheckboxCluster> {
         Text('Trula:'),
         SwitchSign(
           onChanged: (value) {
+            switchSign[1] = value;
             //addings[2] *= (value ? 1 : -1);
             //addings[3] *= (value ? 1 : -1);
           },
@@ -620,6 +718,7 @@ class _CheckboxClusterState extends State<CheckboxCluster> {
         Text('Kralj ultimo:'),
         SwitchSign(
           onChanged: (value) {
+            switchSign[2] = value;
             //addings[4] *= (value ? 1 : -1);
             //addings[5] *= (value ? 1 : -1);
           },
@@ -631,6 +730,7 @@ class _CheckboxClusterState extends State<CheckboxCluster> {
         Text('Pagat ultimo:'),
         SwitchSign(
           onChanged: (value) {
+            switchSign[3] = value;
             //addings[6] *= (value ? 1 : -1);
             //addings[7] *= (value ? 1 : -1);
           },
