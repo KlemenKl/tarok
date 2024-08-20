@@ -1,7 +1,10 @@
+import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 class Model {
   late Box box;
+  late Map<String, Player> playerData = {};
+  late String gameName;
 
   Future<void> instantiateHive() async {
     await Hive.initFlutter();
@@ -31,6 +34,17 @@ class Model {
     return box.values.cast<Player>().toList();
   }
 
+  void deletePlay(var nameOfPlay) {
+    box.delete(nameOfPlay);
+  }
+
+  void retrievePlay(var nameOfPlay) {
+    gameName = nameOfPlay;
+    playerData = Map<String, Player>.from(box.get(nameOfPlay) as Map);
+    print("GAME NAME>" + gameName);
+    print("PlayerData>" + playerData.toString());
+  }
+
   // Private static instance
   static final Model _instance = Model._internal();
 
@@ -42,8 +56,6 @@ class Model {
     return _instance;
   }
 
-  late Map<String, Player> playerData = {};
-  late String gameName;
   static const Map<String, int> valueOfPlays = {
     'Tri': 10,
     'Dve': 20,
@@ -53,8 +65,16 @@ class Model {
     'Solo ena': 60,
     'Solo brez': 70,
     'Berač': 70,
-    'Barvni valat': 70
+    'Barvni valat': 70,
+    'Klop': 0,
   };
+
+  static const List<String> radelciOfPlays = [
+    'Solo brez',
+    'Berač',
+    'Barvni valat',
+    'Klop'
+  ];
 
   static const Map<String, int> valueOfOther = {
     'Kralji': 10,
@@ -71,14 +91,36 @@ class Model {
     playerData[player.name] = (player);
   }
 
-  void addPlayerPoints(String playerIdx, int points) {
-    playerData[playerIdx]?.points.add(points);
+  void addPlayerPoints(String playerName, int points) {
+    playerData[playerName]?.points.add(points);
+  }
+
+  void addRadelce() {
+    for (Player player in playerData.values) {
+      player.radelci.add(false);
+    }
+  }
+
+  bool hasRadelc(String playerName) {
+    var player = playerData[playerName];
+    if (player != null) {
+      for (bool el in player.radelci) {
+        if (el == false) {
+          return true;
+        }
+      }
+      return false;
+    } else {
+      throw Exception("Player with this name does not exists");
+    }
   }
 
   Map<String, Player> get getPlayerData => playerData;
   Map<String, int> get getValueOfPlays => valueOfPlays;
+  List<String> get getRadelciOfPlays => radelciOfPlays;
   Map<String, int> get getValueOfOther => valueOfOther;
   Iterable<String> get getNameOfPlays => valueOfPlays.keys;
+
   List<String> get getPlayerNames {
     List<String> playerNames = [];
     for (Player player in playerData.values) {
@@ -96,8 +138,14 @@ class Model {
 }
 
 class Player {
+  @HiveField(0)
   late String name;
+
+  @HiveField(1)
   List<int> points = [0];
+
+  @HiveField(2)
+  List<bool> radelci = [];
 
   Player(this.name);
 }
@@ -114,9 +162,12 @@ class PlayerAdapter extends TypeAdapter<Player> {
     // Read the `points` field, which is a list of integers
     List<int> points = reader.readList().cast<int>();
 
+    List<bool> radelci = reader.readList().cast<bool>();
+
     // Create a Player object and set its fields
     Player player = Player(name);
     player.points = points;
+    player.radelci = radelci;
 
     return player;
   }
@@ -128,5 +179,7 @@ class PlayerAdapter extends TypeAdapter<Player> {
 
     // Write the `points` field, which is a list of integers
     writer.writeList(obj.points);
+
+    writer.writeList(obj.radelci);
   }
 }
