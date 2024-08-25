@@ -72,7 +72,8 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   Widget build(BuildContext context) {
     List<dynamic> data = config.retrievePlayNames();
-
+    config.playerData.clear();
+    config.gameName = '';
     return Scaffold(
       body: Center(
         child: Padding(
@@ -132,31 +133,10 @@ class _MyHomePageState extends State<MyHomePage> {
                                 color: Colors.green,
                               ),
                               IconButton(
-                                onPressed: () => showDialog<void>(
-                                  context: context,
-                                  builder: (BuildContext context) =>
-                                      AlertDialog(
-                                    title: const Text('OPOZORILO'),
-                                    content: const Text(
-                                        'Želite nepovratno izbrisati igro?'),
-                                    actions: <Widget>[
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(context, 'Cancel'),
-                                        child: const Text('Prekliči'),
-                                      ),
-                                      TextButton(
-                                        onPressed: () {
-                                          setState(() {
-                                            config.deletePlay(name);
-                                            Navigator.pop(context, 'Izbriši');
-                                          });
-                                        },
-                                        child: const Text('Izbriši'),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                                onPressed: () => showAlertDialog(
+                                    context: context,
+                                    onPressedOk: (name) =>
+                                        config.deletePlay(name)),
                                 icon: Icon(Icons.delete),
                                 color: Colors.red,
                               ),
@@ -281,8 +261,13 @@ class _GameStartState extends State<GameStart> {
                               context,
                               MaterialPageRoute(
                                   builder: (context) => MainGameScreen()));
+                        } else if (config.getPlayerData.length == 1) {
+                          showAlertDialog(
+                              context: context,
+                              onPressedOk: (name) => config.deletePlay(name));
                         } else {
-                          showToast(context, "Vpiši ime igre!");
+                          showToast(context,
+                              "Vpiši ime igre in vpiši podatke o igralcih");
                         }
                       });
                     },
@@ -310,8 +295,8 @@ class MainGameScreen extends StatefulWidget {
 class _MainGameScreenState extends State<MainGameScreen> {
   Model config = Model();
 
-  List<List<int?>> transformData() {
-    List<List<int?>> rowsFirst = [];
+  List<List<(int?, String)>> transformData() {
+    List<List<(int?, String)>> rowsFirst = [];
     bool stillFull = true;
     int row = 1;
     while (stillFull) {
@@ -319,26 +304,27 @@ class _MainGameScreenState extends State<MainGameScreen> {
       rowsFirst.add([]);
       int col = 0;
       for (var player in config.getPlayerData.values) {
-        print("Player: " +
-            player.name +
-            "     |||    Player Data values " +
-            player.points.toString());
+        // print("Player: " +
+        //     player.name +
+        //     "     |||    Player Data values " +
+        //     player.points.toString());
         if (row < player.points.length) {
-          print("FirstPoints: " +
-              player.points[row - 1].toString() +
-              "     |||    SecondPOints " +
-              player.points[row].toString());
-          print(rowsFirst);
+          // print("FirstPoints: " +
+          //     player.points[row - 1].toString() +
+          //     "     |||    SecondPOints " +
+          //     player.points[row].toString());
+          // print(rowsFirst);
           if (row > 1) {
-            print((row - 1).toString() + '    ' + col.toString());
-            rowsFirst.lastOrNull!
-                .add(rowsFirst[row - 2][col]! + player.points[row]);
+            // print((row - 1).toString() + '    ' + col.toString());
+            int res = rowsFirst[row - 2][col].$1! + player.points[row];
+            rowsFirst.lastOrNull!.add((res, player.nameOfPlayed[row - 1]));
           } else {
-            rowsFirst.lastOrNull!.add(player.points[row]);
+            rowsFirst.lastOrNull!
+                .add((player.points[row], player.nameOfPlayed[row - 1]));
           }
           stillFull = true;
         } else {
-          rowsFirst.lastOrNull!.add(null);
+          rowsFirst.lastOrNull!.add((null, ''));
         }
         col += 1;
       }
@@ -356,85 +342,111 @@ class _MainGameScreenState extends State<MainGameScreen> {
           title: Text(config.getGameName),
         ),
         body: Padding(
-          padding: const EdgeInsets.all(10.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              Container(
-                color: Colors.white,
-                padding: EdgeInsets.all(20.0),
-                child: Table(
-                  border: TableBorder.all(color: Colors.purple),
-                  defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-                  defaultColumnWidth: IntrinsicColumnWidth(),
-                  children: [
-                    TableRow(children: [
-                      for (String name in config.getPlayerNames)
-                        TableCell(
-                          verticalAlignment: TableCellVerticalAlignment.middle,
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: Text(name,
-                                style: Theme.of(context).textTheme.labelLarge),
-                          ),
-                        ),
-                    ]),
-                    TableRow(children: [
-                      for (String name in config.getPlayerNames)
-                        TableCell(
-                          verticalAlignment: TableCellVerticalAlignment.middle,
-                          child: Row(children: [
-                            for (bool radelc
-                                in config.getPlayerData[name]!.radelci)
-                              radelc == true
-                                  ? Icon(Icons.circle_rounded)
-                                  : Icon(Icons.circle_outlined),
+            padding: const EdgeInsets.all(10.0),
+            child: Column(
+                mainAxisAlignment: MainAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Container(
+                    color: Colors.white,
+                    padding: EdgeInsets.all(20.0),
+                    child: Table(
+                        border: TableBorder(
+                            verticalInside: BorderSide(color: Colors.black)),
+                        defaultVerticalAlignment:
+                            TableCellVerticalAlignment.middle,
+                        defaultColumnWidth: IntrinsicColumnWidth(),
+                        children: [
+                          TableRow(children: [
+                            for (String name in config.getPlayerNames)
+                              TableCell(
+                                verticalAlignment:
+                                    TableCellVerticalAlignment.middle,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(8.0),
+                                  child: Text(name,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelLarge),
+                                ),
+                              ),
                           ]),
-                        ),
-                    ]),
-                    for (List<int?> point in transformData())
-                      TableRow(children: [
-                        for (int? p in point)
-                          if (p == null)
-                            Container()
-                          else
-                            Center(child: Text(p.toString())),
-                        //Padding(
-                        //padding: const EdgeInsets.all(8.0),
-                        //child: Text(name,
-                        //style: Theme.of(context).textTheme.labelLarge),
-                        //),
-                      ]),
-                  ],
-                ),
-              ),
-              Spacer(),
-              Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    ElevatedButton(
-                        onPressed: () {
-                          Navigator.pushReplacement(context,
-                              MaterialPageRoute(builder: (context) => MyApp()));
-                        },
-                        child: Icon(Icons.home)),
-                    ElevatedButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => NewPlay()),
-                          ).then((result) {
-                            setState(() {
-                              print("UPDATING STATE");
-                            });
-                          });
-                        },
-                        child: Icon(Icons.add)),
-                  ])
-            ],
-          ),
-        ));
+                          buildTableRowDivider(
+                              cols: config.getPlayerNames.length),
+                          TableRow(children: [
+                            for (String name in config.getPlayerNames)
+                              TableCell(
+                                verticalAlignment:
+                                    TableCellVerticalAlignment.middle,
+                                child: Wrap(children: [
+                                  for (bool radelc
+                                      in config.getPlayerData[name]!.radelci)
+                                    radelc == true
+                                        ? Icon(Icons.circle_rounded)
+                                        : Icon(Icons.circle_outlined),
+                                ]),
+                              ),
+                          ]),
+                          buildTableRowDivider(
+                              cols: config.getPlayerNames.length),
+                          for (List<(int?, String)> point in transformData())
+                            TableRow(
+                              children: [
+                                for ((int?, String) p in point)
+                                  if (p.$1 == null)
+                                    Container()
+                                  else
+                                    Center(
+                                        child: RichText(
+                                            text: TextSpan(
+                                      style: TextStyle(
+                                          fontSize: 20, color: Colors.black),
+                                      children: <TextSpan>[
+                                        TextSpan(
+                                            text: p.$1.toString() +
+                                                ' '), // Regular text
+                                        TextSpan(
+                                          text: p.$2, // Superscript text
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            // Smaller font size for the superscript
+                                            textBaseline: TextBaseline
+                                                .ideographic, // Shift text upwards to create a superscript effect
+                                          ),
+                                        ),
+                                      ],
+                                    )))
+                              ],
+                            ),
+                        ]),
+                  ),
+                  Spacer(),
+                  Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: <Widget>[
+                        ElevatedButton(
+                            onPressed: () {
+                              Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (context) => MyApp()));
+                            },
+                            child: Icon(Icons.home)),
+                        ElevatedButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (context) => NewPlay()),
+                              ).then((result) {
+                                setState(() {
+                                  print("UPDATING STATE");
+                                });
+                              });
+                            },
+                            child: Icon(Icons.add)),
+                      ])
+                ])));
   }
 }
 
@@ -450,6 +462,7 @@ class _NewPlayState extends State<NewPlay> {
   List<int> results = List.filled(9, 0);
   String partner = '';
   String igralec = '';
+  String igra = '';
   bool addRadelce = false;
   bool useRadelc = false;
   /*
@@ -466,7 +479,8 @@ class _NewPlayState extends State<NewPlay> {
   */
 
   int calculateResults(bool radelc) {
-    int out = results.reduce((value, element) => value + element);
+    // int out = results.reduce((value, element) => value + element);
+    int out = results[0] * results[1];
     if (radelc) {
       return out * 2;
     } else {
@@ -478,6 +492,8 @@ class _NewPlayState extends State<NewPlay> {
   void initState() {
     partner = 'Brez';
     results[0] = 0;
+    results[1] = 1;
+    igra = config.getNameOfPlays.toList().last;
     igralec = config.getPlayerNames.last;
     print("USING INIT STATE!");
     super.initState();
@@ -522,7 +538,7 @@ class _NewPlayState extends State<NewPlay> {
                         SwitchSign(
                           onChanged: (value) {
                             setState(() {
-                              results[0] *= -1;
+                              results[1] *= -1;
                             });
                           },
                         ),
@@ -542,6 +558,7 @@ class _NewPlayState extends State<NewPlay> {
                         DropdownButtonExample(
                           dropdownMenu: config.getNameOfPlays.toList(),
                           onChanged: (value) {
+                            igra = value;
                             //setState(() {
                             //  results[1] = config.getValueOfPlays[value]!;
                             //});
@@ -560,9 +577,7 @@ class _NewPlayState extends State<NewPlay> {
                           dropdownMenu: config.getPlayerNames,
                           onChanged: (value) {
                             setState(() {
-                              print("HERE    " + value);
                               igralec = value;
-                              print("IGRALEC    " + igralec);
                             });
                           },
                         ),
@@ -665,8 +680,10 @@ class _NewPlayState extends State<NewPlay> {
                           setState(() {
                             config.addPlayerPoints(
                                 igralec, calculateResults(useRadelc));
+                            config.addPlayerPlay(igralec, igra);
                             config.addPlayerPoints(
                                 partner, calculateResults(useRadelc));
+                            config.addPlayerPlay(partner, 'None');
                             if (useRadelc) {
                               Player pl = config.playerData[igralec]!;
                               for (final (index, item) in pl.radelci.indexed) {
@@ -690,6 +707,21 @@ class _NewPlayState extends State<NewPlay> {
             )));
   }
 }
+
+TableRow buildTableRowDivider({
+  required int cols,
+  double height = 1,
+  Color color = Colors.black,
+}) =>
+    TableRow(
+      children: [
+        for (var i = 0; i < cols; i++)
+          Container(
+            height: height,
+            color: color,
+          )
+      ],
+    );
 
 class DropdownButtonExample extends StatefulWidget {
   final List<String> dropdownMenu;

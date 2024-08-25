@@ -69,23 +69,37 @@ class Model {
     'Klop': 0,
   };
 
-  static const List<String> radelciOfPlays = [
-    'Solo brez',
-    'Berač',
-    'Barvni valat',
-    'Klop'
-  ];
-
-  static const Map<String, int> valueOfOther = {
-    'Kralji': 10,
-    'Napovedani kralji': 10,
-    'Trula': 10,
-    'Napovedana trula': 10,
-    'Kralj ultimo': 10,
-    'Napovedan kralj ultimo': 10,
-    'Pagat ultimo': 10,
-    'Napovedan pagat ultimo': 10,
+  static const Map<String, String> playAbbreviations = {
+    'Tri': '3',
+    'Dve': '2',
+    'Ena': '1',
+    'Solo tri': 'S3',
+    'Solo dve': 'S2',
+    'Solo ena': 'S1',
+    'Solo brez': 'SB',
+    'Berač': 'B',
+    'Barvni valat': 'BV',
+    'Klop': 'K',
+    'None': ''
   };
+
+  // static const List<String> radelciOfPlays = [
+  //   'Solo brez',
+  //   'Berač',
+  //   'Barvni valat',
+  //   'Klop'
+  // ];
+
+  // static const Map<String, int> valueOfOther = {
+  //   'Kralji': 10,
+  //   'Napovedani kralji': 10,
+  //   'Trula': 10,
+  //   'Napovedana trula': 10,
+  //   'Kralj ultimo': 10,
+  //   'Napovedan kralj ultimo': 10,
+  //   'Pagat ultimo': 10,
+  //   'Napovedan pagat ultimo': 10,
+  // };
 
   void addPlayer(Player player) {
     playerData[player.name] = (player);
@@ -93,6 +107,15 @@ class Model {
 
   void addPlayerPoints(String playerName, int points) {
     playerData[playerName]?.points.add(points);
+  }
+
+  void addPlayerPlay(String playerName, String game) {
+    String? name = playAbbreviations[game];
+    if (name != null) {
+      playerData[playerName]?.nameOfPlayed.add(name);
+    } else {
+      throw Exception('Game name does not exists in name of abbreviations!');
+    }
   }
 
   void addRadelce() {
@@ -117,9 +140,10 @@ class Model {
 
   Map<String, Player> get getPlayerData => playerData;
   Map<String, int> get getValueOfPlays => valueOfPlays;
-  List<String> get getRadelciOfPlays => radelciOfPlays;
-  Map<String, int> get getValueOfOther => valueOfOther;
+  Map<String, String> get getplayAbbreviations => playAbbreviations;
   Iterable<String> get getNameOfPlays => valueOfPlays.keys;
+  // List<String> get getRadelciOfPlays => radelciOfPlays;
+  // Map<String, int> get getValueOfOther => valueOfOther;
 
   List<String> get getPlayerNames {
     List<String> playerNames = [];
@@ -147,6 +171,9 @@ class Player {
   @HiveField(2)
   List<bool> radelci = [];
 
+  @HiveField(3)
+  List<String> nameOfPlayed = [];
+
   Player(this.name);
 }
 
@@ -163,11 +190,13 @@ class PlayerAdapter extends TypeAdapter<Player> {
     List<int> points = reader.readList().cast<int>();
 
     List<bool> radelci = reader.readList().cast<bool>();
+    List<String> nameOfPlayed = reader.readList().cast<String>();
 
     // Create a Player object and set its fields
     Player player = Player(name);
     player.points = points;
     player.radelci = radelci;
+    player.nameOfPlayed = nameOfPlayed;
 
     return player;
   }
@@ -181,5 +210,7 @@ class PlayerAdapter extends TypeAdapter<Player> {
     writer.writeList(obj.points);
 
     writer.writeList(obj.radelci);
+
+    writer.writeList(obj.nameOfPlayed);
   }
 }
